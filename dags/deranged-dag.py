@@ -40,6 +40,16 @@ def gen_ingest_task_group(
     partition_time: str,
 ) -> TaskGroup:
     """ Creates a set of tasks to pull data from a mock data API, download to GCS, and load to BigQuery
+    Args:
+        bucket - the gcs bucket where data will be staged
+        dataset - BigQuery dataset to load data into
+        table_name - target table in BQ
+        n_row - number of rows to generate from data source
+        n_code - number of "code" columns to generate in source
+        n_metric - number of "metric" columns to generate in source
+        partition_time - datetime string YYYYMMDDHH for designating partition in GCS and BQ table
+    Returns:
+        A task group to ingest the table from source to BigQuery
     """
     write_path = f"gs://{bucket}/{table_name}"
     branching_path = f"{bucket}/{table_name}/partition_time={partition_time}"
