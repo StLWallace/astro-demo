@@ -12,7 +12,9 @@ TARGET_TABLE = "test_bq_conn"
 default_args = {
     "catchup": False,
     "project_id": PROJECT_ID,
-    "useLegacySql": False
+    "useLegacySql": False,
+    "location": "US",
+    "gcp_conn_id": 'google_cloud_default'
 }
 
 TEST_Q = "SELECT 1 AS ID, 'A' AS CODE"
@@ -36,6 +38,6 @@ with DAG(
                 "writeDisposition": "WRITE_TRUNCATE"
             }
         },
-        #location=location,
+        location=default_args["location"],
     )
 

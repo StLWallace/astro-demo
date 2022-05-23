@@ -1,0 +1,11 @@
+dataset: "astro_demo"
+table_conf:
+  - name: "table1"
+    n_row: 20
+    n_code: 3
+    n_metric: 5
+  - name: "table2"
+    n_row: 10
+    n_code: 2
+    n_metric: 3
+    

@@ -2,3 +2,5 @@
 .env
 airflow_settings.yaml
 astrocloud
+__pycache__
+sa-astro-demo.json
