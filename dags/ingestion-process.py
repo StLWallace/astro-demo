@@ -13,7 +13,6 @@ This DAG has the following steps:
 """
 
 from datetime import datetime
-from venv import create
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python_operator import PythonOperator
@@ -23,20 +22,20 @@ from plugins.bigquery_tables import get_bq_job_operator
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import (
     GCSToBigQueryOperator,
 )
-from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
 from airflow.operators.python import BranchPythonOperator
 import yaml
 from airflow.utils.task_group import TaskGroup
-from airflow.utils.trigger_rule import TriggerRule
 import os
 
 # Global variables
-DAG_ID = "deranged-dag"
+DAG_ID = "ingestion-process"
 START_DATE = datetime(2022, 5, 22)
-LANDING_BUCKET = "astro_demo_landing"
-PARTITIONTIME = '{{ dag_run.logical_date.strftime("%Y%m%d%H") }}'
-DATASET = "astro_demo"
 PROJECT_ID = os.getenv("GCP_PROJECT")
+PARTITIONTIME = '{{ dag_run.logical_date.strftime("%Y%m%d%H") }}'
+# These could go in config
+DATASET = "astro_demo"
+LANDING_BUCKET = "astro_demo_landing"
+
 
 default_args = {
     "gcp_conn_id": "google_cloud_default",
@@ -45,7 +44,7 @@ default_args = {
 }
 
 # This config will set various parameters of the tasks
-with open("dags/_cfg/deranged-dag.yaml", "r") as f:
+with open("dags/_cfg/ingestion-process.yaml", "r") as f:
     cfg = yaml.safe_load(f)
 
 
@@ -65,6 +64,7 @@ def gen_ingest_task_group(
         dataset - BigQuery dataset to load data into
         table_name - target table in BQ
         n_row - number of rows to generate from data source
+        n_id - number of "foreign keys" to generate
         n_code - number of "code" columns to generate in source
         n_metric - number of "metric" columns to generate in source
         partition_time - datetime string YYYYMMDDHH for designating partition in GCS and BQ table
@@ -123,6 +123,7 @@ def gen_ingest_task_group(
             schema_update_options=["ALLOW_FIELD_ADDITION", "ALLOW_FIELD_RELAXATION"],
         )
 
+        # TriggerRule for api_to_gcs is NONE_FAILED_MIN_ONE_SUCCESS
         branching >> delete_gcs_partition >> api_to_gcs
         branching >> api_to_gcs
         api_to_gcs >> gcs_to_bigquery
@@ -160,6 +161,7 @@ with DAG(
     )
 
     # Semantic table tasks
+    # config contains list of semantic table job properties
     for s_table in cfg["semantic_tables"]:
         load_semantic_table = get_bq_job_operator(
             task_id=f"load_{s_table['name']}",
@@ -168,6 +170,7 @@ with DAG(
             params=s_table["params"],
             query_file=s_table["query_file"]
         )
+        # The semantic table queries pull from the wide table, so we set that task upstream of each
         create_wide_table >> load_semantic_table >> end
 
     # Create an ingest task group using the config file for each table in the list
@@ -183,4 +186,5 @@ with DAG(
             partition_time=PARTITIONTIME,
         )
 
+        # The wide table is created after its sources are ingested
         begin >> ingest_tg >> create_wide_table

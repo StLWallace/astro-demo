@@ -38,8 +38,4 @@ def gen_tasks(task_list: list) -> list:
 
 with DAG(dag_id="serial-dag", start_date=datetime(2022, 5, 22), catchup=False) as dag:
 
-    start = EmptyOperator(task_id="start")
     tasks = gen_tasks(TASK_LIST)
-    end = EmptyOperator(task_id="end")
-
-    start >> tasks >> end
