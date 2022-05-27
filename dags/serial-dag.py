@@ -2,7 +2,6 @@
 Creates a simple DAG with 4 tasks that are serially dependent
 """
 
-import json
 from datetime import datetime
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
