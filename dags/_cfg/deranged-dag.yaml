@@ -1,11 +1,24 @@
 dataset: "astro_demo"
+wide_table:
+  name: pt_astro_demo
 table_conf:
-  - name: "table1"
-    n_row: 20
+  - name: "fact_table"
+    n_row: 50
+    n_id: 3
     n_code: 3
     n_metric: 5
-  - name: "table2"
+  - name: "dimension_1"
     n_row: 10
+    n_id: 0
     n_code: 2
     n_metric: 3
-    
+  - name: "dimension_2"
+    n_row: 10
+    n_id: 0
+    n_code: 1
+    n_metric: 4
+  - name: "dimension_3"
+    n_row: 10
+    n_id: 0
+    n_code: 1
+    n_metric: 5

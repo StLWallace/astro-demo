@@ -40,22 +40,24 @@ class DataGenerator:
         return col
 
     def get_table(
-        self, nrow: int = 10, n_code: int = 2, n_metric: int = 3
+        self, n_row: int = 10, n_id: int = 0, n_code: int = 2, n_metric: int = 3
     ) -> pd.DataFrame:
 
-        df = pd.DataFrame({"id": self.__gen_col(type="id", length=nrow)})
+        df = pd.DataFrame({"id": range(1, (n_row + 1))})
+        for i in range(1, (n_id + 1)):
+            df[f"id_{i}"] = self.__gen_col("id", n_row)
         for i in range(1, (n_code + 1)):
-            df[f"code{i}"] = self.__gen_col("code", nrow)
+            df[f"code{i}"] = self.__gen_col("code", n_row)
         for i in range(1, (n_metric + 1)):
-            df[f"metric_{i}"] = self.__gen_col("metric", nrow)
+            df[f"metric_{i}"] = self.__gen_col("metric", n_row)
         return df
 
 
 def download_data(
-    path: str, n_row: int = 10, n_code: int = 2, n_metric: int = 3
+    path: str, n_row: int = 10, n_id: int = 0, n_code: int = 2, n_metric: int = 3
 ) -> pd.DataFrame:
     gen = DataGenerator()
-    df = gen.get_table(n_row, n_code, n_metric)
+    df = gen.get_table(n_row, n_id, n_code, n_metric)
     df.to_parquet(path=path)
     print(f"Wrote data to {path}")
 
@@ -65,6 +67,7 @@ def data_api_call(
     path: str,
     partition_time: str,
     n_row: int = 10,
+    n_id: int = 0,
     n_code: int = 2,
     n_metric: int = 3,
     trigger_rule = TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS
@@ -82,6 +85,7 @@ def data_api_call(
         op_kwargs={
             "path": full_path,
             "n_row": n_row,
+            "n_id": n_id,
             "n_code": n_code,
             "n_metric": n_metric,
         },

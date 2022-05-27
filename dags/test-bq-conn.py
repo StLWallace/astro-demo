@@ -12,7 +12,6 @@ TARGET_TABLE = "test_bq_conn"
 default_args = {
     "catchup": False,
     "project_id": PROJECT_ID,
-    "useLegacySql": False,
     "location": "US",
     "gcp_conn_id": 'google_cloud_default'
 }
@@ -35,7 +34,8 @@ with DAG(
                     'datasetId': DATASET,
                     'tableId': TARGET_TABLE
                 },
-                "writeDisposition": "WRITE_TRUNCATE"
+                "writeDisposition": "WRITE_TRUNCATE",
+                "useLegacySql": False,
             }
         },
         location=default_args["location"],

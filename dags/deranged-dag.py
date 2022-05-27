@@ -3,6 +3,7 @@
 """
 
 from datetime import datetime
+from venv import create
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python_operator import PythonOperator
@@ -11,19 +12,26 @@ from plugins.gcs_utils import check_data_exists, delete_data
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import (
     GCSToBigQueryOperator,
 )
+from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
 from airflow.operators.python import BranchPythonOperator
 import yaml
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
+import os
 
 # Global variablwes
 DAG_ID = "deranged-dag"
 START_DATE = datetime(2022, 5, 22)
 LANDING_BUCKET = "astro_demo_landing"
-PARTITIONTIME = "{{ dag_run.logical_date.strftime('%Y%m%d%H') }}"
+PARTITIONTIME = '{{ dag_run.logical_date.strftime("%Y%m%d%H") }}'
 DATASET = "astro_demo"
+PROJECT_ID = os.getenv("GCP_PROJECT")
 
-default_args = {"gcp_conn_id": "google_cloud_default"}
+default_args = {
+    "gcp_conn_id": "google_cloud_default",
+    "location": "US",
+    "useLegacySql": False,
+}
 
 # This config will set various parameters of the tasks
 with open("dags/_cfg/deranged-dag.yaml", "r") as f:
@@ -35,6 +43,7 @@ def gen_ingest_task_group(
     dataset: str,
     table_name: str,
     n_row: int,
+    n_id: int,
     n_code: int,
     n_metric: int,
     partition_time: str,
@@ -82,6 +91,7 @@ def gen_ingest_task_group(
             task_id=api_task_id,
             path=write_path,
             n_row=n_row,
+            n_id=n_id,
             n_code=n_code,
             n_metric=n_metric,
             partition_time=partition_time,
@@ -102,20 +112,53 @@ def gen_ingest_task_group(
         branching >> api_to_gcs
         api_to_gcs >> gcs_to_bigquery
 
+    return tg
+
 
 with DAG(
-    dag_id=DAG_ID, start_date=START_DATE, catchup=False, default_args=default_args,
+    dag_id=DAG_ID,
+    start_date=START_DATE,
+    catchup=False,
+    default_args=default_args,
+    template_searchpath="dags/sql/",
 ) as dag:
 
-    tasks = [
-        gen_ingest_task_group(
+    create_wide_table = BigQueryInsertJobOperator(
+        task_id="create_wide_table",
+        configuration={
+            "query": {
+                "query": "{% include 'combined_table.sql' %}",
+                "destinationTable": {
+                    "projectId": PROJECT_ID,
+                    "datasetId": DATASET,
+                    "tableId": cfg["wide_table"]["name"],
+                },
+                "writeDisposition": "WRITE_TRUNCATE",
+                "useLegacySql": False,
+            }
+        },
+        location=default_args["location"],
+        params={
+            "fact_table": f'{DATASET}.{cfg["table_conf"][0]["name"]}',
+            "tables": [
+                f"{DATASET}.{table['name']}"
+                for table in cfg["table_conf"]
+                if "fact" not in table["name"]
+            ],
+            "partition_time": PARTITIONTIME
+        },
+    )
+
+    for table in cfg["table_conf"]:
+        ingest_tg = gen_ingest_task_group(
             bucket=LANDING_BUCKET,
             dataset=cfg["dataset"],
             table_name=table["name"],
             n_row=table["n_row"],
+            n_id=table["n_id"],
             n_code=table["n_code"],
             n_metric=table["n_metric"],
             partition_time=PARTITIONTIME,
         )
-        for table in cfg["table_conf"]
-    ]
+
+        ingest_tg >> create_wide_table
