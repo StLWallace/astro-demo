@@ -1,4 +1,14 @@
 """ Part 1, exercise 3
+This DAG has the following steps:
+
+0. Read in a config file to supply variables to operators
+
+1. Create task group for ingest to BigQuery
+    a. Check to see if current time partition already exists in GCS. If it does, delete it
+    b. Pull data from a fake rest API and write to GCS
+    c. Ingest data into BigQuery
+2. Join all tables together into a "purposed" wide table
+3. Create semantic tables from wide table
 
 """
 
@@ -9,6 +19,7 @@ from airflow.operators.empty import EmptyOperator
 from airflow.operators.python_operator import PythonOperator
 from plugins.gen_data import data_api_call
 from plugins.gcs_utils import check_data_exists, delete_data
+from plugins.bigquery_tables import get_bq_job_operator
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import (
     GCSToBigQueryOperator,
 )
@@ -71,6 +82,7 @@ def gen_ingest_task_group(
 
     with TaskGroup(group_id=group_id) as tg:
 
+        # Determine if GCS partition exists. 
         branching = BranchPythonOperator(
             task_id="branching",
             python_callable=check_data_exists,
@@ -81,12 +93,14 @@ def gen_ingest_task_group(
             },
         )
 
+        # Operator to delete GCS partition if it exists
         delete_gcs_partition = PythonOperator(
             task_id=delete_task_id,
             python_callable=delete_data,
             op_kwargs={"path": branching_path},
         )
 
+        # Write new data to GCS from (fake) API
         api_to_gcs = data_api_call(
             task_id=api_task_id,
             path=write_path,
@@ -97,6 +111,7 @@ def gen_ingest_task_group(
             partition_time=partition_time,
         )
 
+        # Load data from GCS to BigQuery
         gcs_to_bigquery = GCSToBigQueryOperator(
             task_id=gcs_to_bq_task_id,
             bucket=bucket,
@@ -123,21 +138,15 @@ with DAG(
     template_searchpath="dags/sql/",
 ) as dag:
 
-    create_wide_table = BigQueryInsertJobOperator(
+    # Create dummy tasks to bookend DAG
+    begin = EmptyOperator(task_id="begin")
+    end = EmptyOperator(task_id="end")
+
+    # Task to load "wide" table 
+    create_wide_table = get_bq_job_operator(
         task_id="create_wide_table",
-        configuration={
-            "query": {
-                "query": "{% include 'combined_table.sql' %}",
-                "destinationTable": {
-                    "projectId": PROJECT_ID,
-                    "datasetId": DATASET,
-                    "tableId": cfg["wide_table"]["name"],
-                },
-                "writeDisposition": "WRITE_TRUNCATE",
-                "useLegacySql": False,
-            }
-        },
-        location=default_args["location"],
+        table=cfg["wide_table"]["name"],
+        dataset=DATASET,
         params={
             "fact_table": f'{DATASET}.{cfg["table_conf"][0]["name"]}',
             "tables": [
@@ -145,10 +154,23 @@ with DAG(
                 for table in cfg["table_conf"]
                 if "fact" not in table["name"]
             ],
-            "partition_time": PARTITIONTIME
+            "partition_time": PARTITIONTIME,
         },
+        query_file="combined_table.sql"
     )
 
+    # Semantic table tasks
+    for s_table in cfg["semantic_tables"]:
+        load_semantic_table = get_bq_job_operator(
+            task_id=f"load_{s_table['name']}",
+            table=s_table['name'],
+            dataset=DATASET,
+            params=s_table["params"],
+            query_file=s_table["query_file"]
+        )
+        create_wide_table >> load_semantic_table >> end
+
+    # Create an ingest task group using the config file for each table in the list
     for table in cfg["table_conf"]:
         ingest_tg = gen_ingest_task_group(
             bucket=LANDING_BUCKET,
@@ -161,4 +183,4 @@ with DAG(
             partition_time=PARTITIONTIME,
         )
 
-        ingest_tg >> create_wide_table
+        begin >> ingest_tg >> create_wide_table

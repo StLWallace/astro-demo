@@ -1,6 +1,19 @@
 dataset: "astro_demo"
 wide_table:
   name: pt_astro_demo
+semantic_tables:
+  - name: semantic_code_1_totals
+    query_file: semantic_code_1_totals.sql
+    params:
+      wide_table: astro_demo.pt_astro_demo
+  - name: semantic_dim_1_code_1_totals
+    query_file: semantic_dim_1_code_1_2_totals.sql
+    params:
+      wide_table: astro_demo.pt_astro_demo
+  - name: semantic_dim_2_code_1_2_totals
+    query_file: semantic_dim_2_code_1_totals.sql
+    params:
+      wide_table: astro_demo.pt_astro_demo
 table_conf:
   - name: "fact_table"
     n_row: 50
