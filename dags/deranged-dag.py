@@ -30,7 +30,7 @@ from airflow.utils.task_group import TaskGroup
 from airflow.utils.trigger_rule import TriggerRule
 import os
 
-# Global variablwes
+# Global variables
 DAG_ID = "deranged-dag"
 START_DATE = datetime(2022, 5, 22)
 LANDING_BUCKET = "astro_demo_landing"
