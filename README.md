@@ -1,7 +1,7 @@
 # Astronomer Demo
 
 ## Overview
-This repo contains DAGs and supporting libraries for the Astronomer Field Engineer interview.
+This repo contains DAGs and supporting libraries to demo Airflow using Astro
 
 ## DAGS
 1. serial-dag.py
